@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BackEnd\BackEnd.csproj" />
+    <ProjectReference Include="..\FrontEnd\FrontEnd.csproj" />
   </ItemGroup>
 
 </Project>

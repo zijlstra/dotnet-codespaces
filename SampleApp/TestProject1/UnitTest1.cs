@@ -2,10 +2,13 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using FrontEnd.Data;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace TestProject1;
 
+/// This test class is an example of how to write integration tests for the backend API.
 public class UnitTest1 : IClassFixture<WeatherForecastApiFixture>
 {
     private readonly HttpClient _client;
@@ -182,5 +185,75 @@ public sealed class WeatherForecastApiFixture : IAsyncLifetime
 
         listener.Start();
         return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+    }
+}
+
+/// Frontend client tests.
+public class UnitTest2
+{
+    [Fact]
+    public async Task GetForecastAsync_RequestsForecastsAndDeserializesResponse()
+    {
+        var expectedForecasts = new[]
+        {
+            new WeatherForecast
+            {
+                Date = new DateOnly(2026, 11, 3),
+                TemperatureC = -20,
+                Summary = "Freezing"
+            },
+            new WeatherForecast
+            {
+                Date = new DateOnly(2026, 11, 4),
+                TemperatureC = 54,
+                Summary = "Scorching"
+            }
+        };
+        var handler = new ForecastResponseHandler(expectedForecasts);
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://backend.example/")
+        };
+        var forecastClient = new WeatherForecastClient(
+            httpClient,
+            NullLogger<WeatherForecastClient>.Instance);
+
+        var forecasts = await forecastClient.GetForecastAsync(null);
+
+        Assert.NotNull(handler.RequestUri);
+        Assert.Equal("/WeatherForecast", handler.RequestUri.AbsolutePath);
+        Assert.Equal("?startDate=", handler.RequestUri.Query);
+        Assert.Equal(expectedForecasts.Length, forecasts.Length);
+        Assert.Equal(expectedForecasts[0].Date, forecasts[0].Date);
+        Assert.Equal(expectedForecasts[0].TemperatureC, forecasts[0].TemperatureC);
+        Assert.Equal(expectedForecasts[0].Summary, forecasts[0].Summary);
+        Assert.Equal(expectedForecasts[1].Date, forecasts[1].Date);
+        Assert.Equal(expectedForecasts[1].TemperatureC, forecasts[1].TemperatureC);
+        Assert.Equal(expectedForecasts[1].Summary, forecasts[1].Summary);
+        Assert.Equal(expectedForecasts[0].TemperatureF, forecasts[0].TemperatureF);
+        Assert.Equal(expectedForecasts[1].TemperatureF, forecasts[1].TemperatureF);
+    }
+
+    private sealed class ForecastResponseHandler : HttpMessageHandler
+    {
+        private readonly WeatherForecast[] _forecasts;
+
+        public ForecastResponseHandler(WeatherForecast[] forecasts)
+        {
+            _forecasts = forecasts;
+        }
+
+        public Uri? RequestUri { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            RequestUri = request.RequestUri;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(_forecasts)
+            });
+        }
     }
 }
